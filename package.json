@@ -1,0 +1,18 @@
+{
+  "name": "automata-compiler",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mini compiler project with Express backend and Monaco editor frontend.",
+  "main": "backend/src/server.js",
+  "scripts": {
+    "start": "node backend/src/server.js",
+    "dev": "nodemon backend/src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
