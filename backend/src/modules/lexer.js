@@ -199,7 +199,7 @@ class Lexer {
 			num += this.advance();
 		}
 		if (this.current() === "." && this.isDigit(this.peek())) {
-			num += this.advance(); // consume '.'
+			num += this.advance();
 			while (!this.isAtEnd() && this.isDigit(this.current())) {
 				num += this.advance();
 			}

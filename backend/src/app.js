@@ -10,7 +10,7 @@ app.use(express.static(frontendPath));
 app.use("/", runRoute);
 
 app.get("/", (_req, res) => {
-  res.sendFile(path.join(frontendPath, "index.html"));
+	res.sendFile(path.join(frontendPath, "index.html"));
 });
 
 module.exports = app;
