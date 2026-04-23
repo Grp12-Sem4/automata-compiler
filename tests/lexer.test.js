@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const { Lexer, TokenType } = require("../backend/src/modules/lexer");
 
 test("lexer tokenizes declarations, arithmetic, and equality", () => {
-  const source = "let total = 42 % 5; print total == 2;";
+  const source = "let total = 42 % 5; print(total == 2);";
   const tokens = new Lexer(source).tokenize();
 
   assert.deepEqual(
@@ -17,9 +17,11 @@ test("lexer tokenizes declarations, arithmetic, and equality", () => {
       TokenType.NUMBER,
       TokenType.SEMICOLON,
       TokenType.PRINT,
+      TokenType.LPAREN,
       TokenType.IDENTIFIER,
-      TokenType.EQ,
+      TokenType.EQUAL_EQUAL,
       TokenType.NUMBER,
+      TokenType.RPAREN,
       TokenType.SEMICOLON,
       TokenType.EOF
     ]
@@ -27,5 +29,5 @@ test("lexer tokenizes declarations, arithmetic, and equality", () => {
 
   assert.equal(tokens[2].value, "=");
   assert.equal(tokens[4].value, "%");
-  assert.equal(tokens[9].value, "==");
+  assert.equal(tokens[10].value, "==");
 });

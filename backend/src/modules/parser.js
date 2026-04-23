@@ -1,5 +1,17 @@
 const { TokenType } = require("./lexer");
 
+class ParserError extends Error {
+	constructor(message, token) {
+		super(message);
+		this.name = "ParserError";
+		this.phase = "syntax";
+		this.line = token?.line ?? null;
+		this.column = token?.column ?? null;
+		this.token = token?.type ?? "EOF";
+		this.lexeme = token?.value ?? null;
+	}
+}
+
 class Parser {
 	constructor(tokens) {
 		this.tokens = tokens;
@@ -8,36 +20,35 @@ class Parser {
 
 	parse() {
 		const body = [];
+		const startToken = this.peek();
 
 		while (!this.isAtEnd()) {
 			body.push(this.statement());
 		}
 
-		return {
-			type: "Program",
-			body,
-		};
+		const endToken = body.length > 0 ? this.getNodeEndToken(body[body.length - 1]) : startToken;
+		return this.createNode("Program", { body }, startToken, endToken);
 	}
 
 	statement() {
 		if (this.match(TokenType.LET)) {
-			return this.variableDeclaration();
+			return this.variableDeclaration(this.previous());
 		}
 
 		if (this.match(TokenType.PRINT)) {
-			return this.printStatement();
+			return this.printStatement(this.previous());
 		}
 
 		if (this.match(TokenType.IF)) {
-			return this.ifStatement();
+			return this.ifStatement(this.previous());
 		}
 
 		if (this.match(TokenType.WHILE)) {
-			return this.whileStatement();
+			return this.whileStatement(this.previous());
 		}
 
 		if (this.match(TokenType.LBRACE)) {
-			return this.blockStatement();
+			return this.blockStatement(this.previous());
 		}
 
 		if (this.check(TokenType.IDENTIFIER) && this.checkNext(TokenType.ASSIGN)) {
@@ -47,7 +58,7 @@ class Parser {
 		return this.expressionStatement();
 	}
 
-	variableDeclaration() {
+	variableDeclaration(letToken) {
 		const identifier = this.consume(
 			TokenType.IDENTIFIER,
 			"Expected variable name after 'let'.",
@@ -56,16 +67,20 @@ class Parser {
 		this.consume(TokenType.ASSIGN, "Expected '=' after variable name.");
 
 		const initializer = this.expression();
-		this.consume(
+		const semicolon = this.consume(
 			TokenType.SEMICOLON,
 			"Expected ';' after variable declaration.",
 		);
 
-		return {
-			type: "VariableDeclaration",
-			identifier: identifier.value,
-			initializer,
-		};
+		return this.createNode(
+			"VariableDeclaration",
+			{
+				identifier: identifier.value,
+				initializer,
+			},
+			letToken,
+			semicolon,
+		);
 	}
 
 	assignmentStatement() {
@@ -75,102 +90,169 @@ class Parser {
 		);
 		this.consume(TokenType.ASSIGN, "Expected '=' in assignment.");
 		const value = this.expression();
-		this.consume(TokenType.SEMICOLON, "Expected ';' after assignment.");
+		const semicolon = this.consume(
+			TokenType.SEMICOLON,
+			"Expected ';' after assignment.",
+		);
 
-		return {
-			type: "AssignmentStatement",
-			identifier: identifier.value,
-			value,
-		};
+		return this.createNode(
+			"AssignmentStatement",
+			{
+				identifier: identifier.value,
+				value,
+			},
+			identifier,
+			semicolon,
+		);
 	}
 
-	printStatement() {
-		let expression;
+	printStatement(printToken) {
+		this.consume(TokenType.LPAREN, "Expected '(' after 'print'.");
+		const expression = this.expression();
+		this.consume(TokenType.RPAREN, "Expected ')' after print expression.");
+		const semicolon = this.consume(
+			TokenType.SEMICOLON,
+			"Expected ';' after print statement.",
+		);
 
-		if (this.match(TokenType.LPAREN)) {
-			expression = this.expression();
-			this.consume(TokenType.RPAREN, "Expected ')' after print expression.");
-		} else {
-			expression = this.expression();
-		}
-
-		this.consume(TokenType.SEMICOLON, "Expected ';' after print statement.");
-
-		return {
-			type: "PrintStatement",
-			expression,
-		};
+		return this.createNode(
+			"PrintStatement",
+			{ expression },
+			printToken,
+			semicolon,
+		);
 	}
 
-	ifStatement() {
+	ifStatement(ifToken) {
 		this.consume(TokenType.LPAREN, "Expected '(' after 'if'.");
 		const condition = this.expression();
 		this.consume(TokenType.RPAREN, "Expected ')' after condition.");
 
-		const thenBranch = this.statement();
-		const elseBranch = this.match(TokenType.ELSE) ? this.statement() : null;
+		const thenBranch = this.requireBlock("Expected '{' before if body.");
+		const elseBranch = this.match(TokenType.ELSE)
+			? this.requireBlock("Expected '{' before else body.")
+			: null;
 
-		return {
-			type: "IfStatement",
-			condition,
-			thenBranch,
-			elseBranch,
-		};
+		return this.createNode(
+			"IfStatement",
+			{
+				condition,
+				thenBranch,
+				elseBranch,
+			},
+			ifToken,
+			elseBranch ? this.getNodeEndToken(elseBranch) : this.getNodeEndToken(thenBranch),
+		);
 	}
 
-	whileStatement() {
+	whileStatement(whileToken) {
 		this.consume(TokenType.LPAREN, "Expected '(' after 'while'.");
 		const condition = this.expression();
 		this.consume(TokenType.RPAREN, "Expected ')' after condition.");
+		const body = this.requireBlock("Expected '{' before while body.");
 
-		return {
-			type: "WhileStatement",
-			condition,
-			body: this.statement(),
-		};
+		return this.createNode(
+			"WhileStatement",
+			{ condition, body },
+			whileToken,
+			this.getNodeEndToken(body),
+		);
 	}
 
-	blockStatement() {
+	requireBlock(message) {
+		const lbrace = this.consume(TokenType.LBRACE, message);
+		return this.blockStatement(lbrace);
+	}
+
+	blockStatement(openBrace = this.previous()) {
 		const body = [];
 
 		while (!this.check(TokenType.RBRACE) && !this.isAtEnd()) {
 			body.push(this.statement());
 		}
 
-		this.consume(TokenType.RBRACE, "Expected '}' after block.");
+		const closeBrace = this.consume(TokenType.RBRACE, "Expected '}' after block.");
 
-		return {
-			type: "BlockStatement",
-			body,
-		};
+		return this.createNode("BlockStatement", { body }, openBrace, closeBrace);
 	}
 
 	expressionStatement() {
 		const expression = this.expression();
-		this.consume(TokenType.SEMICOLON, "Expected ';' after expression.");
+		const semicolon = this.consume(
+			TokenType.SEMICOLON,
+			"Expected ';' after expression.",
+		);
 
-		return {
-			type: "ExpressionStatement",
-			expression,
-		};
+		return this.createNode(
+			"ExpressionStatement",
+			{ expression },
+			this.getNodeStartToken(expression),
+			semicolon,
+		);
 	}
 
 	expression() {
-		return this.equality();
+		return this.logicalOr();
+	}
+
+	logicalOr() {
+		let expression = this.logicalAnd();
+
+		while (this.match(TokenType.OR)) {
+			const operator = this.previous();
+			const right = this.logicalAnd();
+			expression = this.createNode(
+				"LogicalExpression",
+				{
+					operator: operator.type,
+					left: expression,
+					right,
+				},
+				this.getNodeStartToken(expression),
+				this.getNodeEndToken(right),
+			);
+		}
+
+		return expression;
+	}
+
+	logicalAnd() {
+		let expression = this.equality();
+
+		while (this.match(TokenType.AND)) {
+			const operator = this.previous();
+			const right = this.equality();
+			expression = this.createNode(
+				"LogicalExpression",
+				{
+					operator: operator.type,
+					left: expression,
+					right,
+				},
+				this.getNodeStartToken(expression),
+				this.getNodeEndToken(right),
+			);
+		}
+
+		return expression;
 	}
 
 	equality() {
 		let expression = this.comparison();
 
-		while (this.match(TokenType.EQ, TokenType.NEQ)) {
-			const operator = this.previous().type;
+		while (this.match(TokenType.EQUAL_EQUAL, TokenType.BANG_EQUAL)) {
+			const operator = this.previous();
 			const right = this.comparison();
-			expression = {
-				type: "BinaryExpression",
-				operator,
-				left: expression,
-				right,
-			};
+			expression = this.createNode(
+				"BinaryExpression",
+				{
+					operator: operator.type,
+					left: expression,
+					right,
+				},
+				this.getNodeStartToken(expression),
+				this.getNodeEndToken(right),
+			);
 		}
 
 		return expression;
@@ -182,14 +264,18 @@ class Parser {
 		while (
 			this.match(TokenType.GT, TokenType.GTE, TokenType.LT, TokenType.LTE)
 		) {
-			const operator = this.previous().type;
+			const operator = this.previous();
 			const right = this.term();
-			expression = {
-				type: "BinaryExpression",
-				operator,
-				left: expression,
-				right,
-			};
+			expression = this.createNode(
+				"BinaryExpression",
+				{
+					operator: operator.type,
+					left: expression,
+					right,
+				},
+				this.getNodeStartToken(expression),
+				this.getNodeEndToken(right),
+			);
 		}
 
 		return expression;
@@ -199,14 +285,18 @@ class Parser {
 		let expression = this.factor();
 
 		while (this.match(TokenType.PLUS, TokenType.MINUS)) {
-			const operator = this.previous().type;
+			const operator = this.previous();
 			const right = this.factor();
-			expression = {
-				type: "BinaryExpression",
-				operator,
-				left: expression,
-				right,
-			};
+			expression = this.createNode(
+				"BinaryExpression",
+				{
+					operator: operator.type,
+					left: expression,
+					right,
+				},
+				this.getNodeStartToken(expression),
+				this.getNodeEndToken(right),
+			);
 		}
 
 		return expression;
@@ -216,44 +306,91 @@ class Parser {
 		let expression = this.unary();
 
 		while (this.match(TokenType.STAR, TokenType.SLASH, TokenType.MOD)) {
-			const operator = this.previous().type;
+			const operator = this.previous();
 			const right = this.unary();
-			expression = {
-				type: "BinaryExpression",
-				operator,
-				left: expression,
-				right,
-			};
+			expression = this.createNode(
+				"BinaryExpression",
+				{
+					operator: operator.type,
+					left: expression,
+					right,
+				},
+				this.getNodeStartToken(expression),
+				this.getNodeEndToken(right),
+			);
 		}
 
 		return expression;
 	}
 
 	unary() {
-		if (this.match(TokenType.MINUS)) {
-			return {
-				type: "UnaryExpression",
-				operator: this.previous().type,
-				argument: this.unary(),
-			};
+		if (this.match(TokenType.MINUS, TokenType.BANG)) {
+			const operator = this.previous();
+			const argument = this.unary();
+			return this.createNode(
+				"UnaryExpression",
+				{
+					operator: operator.type,
+					argument,
+				},
+				operator,
+				this.getNodeEndToken(argument),
+			);
 		}
 
-		return this.primary();
+		return this.call();
+	}
+
+	call() {
+		let expression = this.primary();
+
+		while (this.match(TokenType.LPAREN)) {
+			const args = [];
+
+			if (!this.check(TokenType.RPAREN)) {
+				args.push(this.expression());
+			}
+
+			const closeParen = this.consume(
+				TokenType.RPAREN,
+				"Expected ')' after function arguments.",
+			);
+
+			expression = this.createNode(
+				"CallExpression",
+				{
+					callee: expression,
+					arguments: args,
+				},
+				this.getNodeStartToken(expression),
+				closeParen,
+			);
+		}
+
+		return expression;
 	}
 
 	primary() {
-		if (this.match(TokenType.NUMBER)) {
-			return {
-				type: "Literal",
-				value: this.previous().value,
-			};
+		if (this.match(TokenType.FALSE)) {
+			return this.literalNode(false, this.previous());
 		}
 
-		if (this.match(TokenType.IDENTIFIER)) {
-			return {
-				type: "Identifier",
-				name: this.previous().value,
-			};
+		if (this.match(TokenType.TRUE)) {
+			return this.literalNode(true, this.previous());
+		}
+
+		if (this.match(TokenType.NUMBER, TokenType.STRING)) {
+			return this.literalNode(this.previous().value, this.previous());
+		}
+
+		if (this.match(TokenType.IDENTIFIER, TokenType.INPUT)) {
+			const token = this.previous();
+			return this.createNode(
+				"Identifier",
+				{ name: token.value },
+				token,
+				token,
+			);
 		}
 
 		if (this.match(TokenType.LPAREN)) {
@@ -263,6 +400,62 @@ class Parser {
 		}
 
 		throw this.error(this.peek(), "Expected an expression.");
+	}
+
+	literalNode(value, token) {
+		return this.createNode("Literal", { value }, token, token);
+	}
+
+	createNode(type, properties, startToken, endToken = startToken) {
+		const node = {
+			type,
+			...properties,
+			loc: {
+				start: {
+					line: startToken?.line ?? null,
+					column: startToken?.column ?? null,
+				},
+				end: this.getTokenEnd(endToken),
+			},
+		};
+
+		Object.defineProperty(node, "startToken", {
+			value: startToken,
+			enumerable: false,
+			writable: true,
+		});
+		Object.defineProperty(node, "endToken", {
+			value: endToken,
+			enumerable: false,
+			writable: true,
+		});
+
+		return node;
+	}
+
+	getTokenEnd(token) {
+		if (!token) {
+			return { line: null, column: null };
+		}
+
+		const rawValue = token.value === null || token.value === undefined
+			? token.type
+			: token.value;
+		const text =
+			token.type === TokenType.STRING ? `"${rawValue}"` : String(rawValue);
+
+		return {
+			line: token.line,
+			column: token.column + Math.max(text.length - 1, 0),
+		};
+	}
+
+	getNodeStartToken(node) {
+		return node?.startToken ?? this.peek();
+	}
+
+	getNodeEndToken(node) {
+		return node?.endToken ?? this.previous();
 	}
 
 	match(...types) {
@@ -321,11 +514,9 @@ class Parser {
 	}
 
 	error(token, message) {
-		const found = token ? token.type : "EOF";
-		return new Error(
-			`[Parser] Line ${token?.line ?? "?"}: ${message} Found ${found}.`,
-		);
+		const found = token?.type ?? "EOF";
+		return new ParserError(`${message} Found ${found}.`, token);
 	}
 }
 
-module.exports = { Parser };
+module.exports = { Parser, ParserError };

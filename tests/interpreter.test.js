@@ -11,7 +11,7 @@ test("interpreter executes statements and updates the symbol table", () => {
     "while (x < 4) {",
     "  x = x + 1;",
     "}",
-    "print x;"
+    "print(x);"
   ].join("\n");
 
   const tokens = new Lexer(source).tokenize();
