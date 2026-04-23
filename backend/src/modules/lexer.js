@@ -4,9 +4,13 @@ const TokenType = {
 	IF: "IF",
 	ELSE: "ELSE",
 	WHILE: "WHILE",
+	INPUT: "INPUT",
+	TRUE: "TRUE",
+	FALSE: "FALSE",
 
 	NUMBER: "NUMBER",
 	IDENTIFIER: "IDENTIFIER",
+	STRING: "STRING",
 
 	PLUS: "PLUS", // +
 	MINUS: "MINUS", // -
@@ -14,8 +18,11 @@ const TokenType = {
 	SLASH: "SLASH", // /
 	MOD: "MOD", // %
 	ASSIGN: "ASSIGN", // =
-	EQ: "EQ", // ==
-	NEQ: "NEQ", // !=
+	EQUAL_EQUAL: "EQUAL_EQUAL", // ==
+	BANG_EQUAL: "BANG_EQUAL", // !=
+	BANG: "BANG", // !
+	AND: "AND", // &&
+	OR: "OR", // ||
 	LT: "LT", //
 	GT: "GT", // >
 	LTE: "LTE", // <=
@@ -36,17 +43,30 @@ const KEYWORDS = {
 	if: TokenType.IF,
 	else: TokenType.ELSE,
 	while: TokenType.WHILE,
+	input: TokenType.INPUT,
+	true: TokenType.TRUE,
+	false: TokenType.FALSE,
 };
 
+class LexerError extends Error {
+	constructor(message, line, column) {
+		super(message);
+		this.phase = "lexical";
+		this.line = line;
+		this.column = column;
+	}
+}
+
 class Token {
-	constructor(type, value, line) {
+	constructor(type, value, line, column) {
 		this.type = type;
 		this.value = value;
 		this.line = line;
+		this.column = column;
 	}
 
 	toString() {
-		return `Token(${this.type}, ${this.value}, line:${this.line})`;
+		return `Token(${this.type}, ${this.value}, line:${this.line}, col:${this.column})`;
 	}
 }
 
@@ -55,6 +75,7 @@ class Lexer {
 		this.source = source;
 		this.pos = 0;
 		this.line = 1;
+		this.column = 1;
 		this.tokens = [];
 	}
 
@@ -68,7 +89,12 @@ class Lexer {
 
 	advance() {
 		const ch = this.source[this.pos++];
-		if (ch === "\n") this.line++;
+		if (ch === "\n") {
+			this.line++;
+			this.column = 1;
+		} else {
+			this.column++;
+		}
 		return ch;
 	}
 
@@ -88,23 +114,26 @@ class Lexer {
 		return this.pos >= this.source.length;
 	}
 
-	addToken(type, value) {
-		this.tokens.push(new Token(type, value, this.line));
+	addToken(type, value, line, column) {
+		this.tokens.push(new Token(type, value, line, column));
 	}
 
 	tokenize() {
 		while (!this.isAtEnd()) {
-			this.scanToken();
+			const startLine = this.line;
+			const startColumn = this.column;
+			this.scanToken(startLine, startColumn);
 		}
-		this.addToken(TokenType.EOF, null);
+		this.addToken(TokenType.EOF, null, this.line, this.column);
 		return this.tokens;
 	}
 
-	scanToken() {
+	scanToken(startLine, startColumn) {
 		const ch = this.advance();
 
 		if (this.isWhitespace(ch)) return;
 
+		// to find comments in code
 		if (ch === "/" && this.current() === "/") {
 			while (!this.isAtEnd() && this.current() !== "\n") this.advance();
 			return;
@@ -112,88 +141,105 @@ class Lexer {
 
 		switch (ch) {
 			case "+":
-				this.addToken(TokenType.PLUS, ch);
+				this.addToken(TokenType.PLUS, ch, startLine, startColumn);
 				break;
 			case "-":
-				this.addToken(TokenType.MINUS, ch);
+				this.addToken(TokenType.MINUS, ch, startLine, startColumn);
 				break;
 			case "*":
-				this.addToken(TokenType.STAR, ch);
+				this.addToken(TokenType.STAR, ch, startLine, startColumn);
 				break;
 			case "/":
-				this.addToken(TokenType.SLASH, ch);
+				this.addToken(TokenType.SLASH, ch, startLine, startColumn);
 				break;
 			case "%":
-				this.addToken(TokenType.MOD, ch);
+				this.addToken(TokenType.MOD, ch, startLine, startColumn);
 				break;
 			case ";":
-				this.addToken(TokenType.SEMICOLON, ch);
+				this.addToken(TokenType.SEMICOLON, ch, startLine, startColumn);
 				break;
 			case "(":
-				this.addToken(TokenType.LPAREN, ch);
+				this.addToken(TokenType.LPAREN, ch, startLine, startColumn);
 				break;
 			case ")":
-				this.addToken(TokenType.RPAREN, ch);
+				this.addToken(TokenType.RPAREN, ch, startLine, startColumn);
 				break;
 			case "{":
-				this.addToken(TokenType.LBRACE, ch);
+				this.addToken(TokenType.LBRACE, ch, startLine, startColumn);
 				break;
 			case "}":
-				this.addToken(TokenType.RBRACE, ch);
+				this.addToken(TokenType.RBRACE, ch, startLine, startColumn);
+				break;
+			case '"':
+				this.readString(startLine, startColumn);
 				break;
 
 			case "=":
 				if (this.current() === "=") {
 					this.advance();
-					this.addToken(TokenType.EQ, "==");
+					this.addToken(TokenType.EQUAL_EQUAL, "==", startLine, startColumn);
 				} else {
-					this.addToken(TokenType.ASSIGN, "=");
+					this.addToken(TokenType.ASSIGN, "=", startLine, startColumn);
 				}
 				break;
 
 			case "!":
 				if (this.current() === "=") {
 					this.advance();
-					this.addToken(TokenType.NEQ, "!=");
+					this.addToken(TokenType.BANG_EQUAL, "!=", startLine, startColumn);
 				} else {
-					throw new Error(
-						`[Lexer] Line ${this.line}: Unexpected character '!'`,
-					);
+					this.addToken(TokenType.BANG, "!", startLine, startColumn);
+				}
+				break;
+
+			case "&":
+				if (this.current() === "&") {
+					this.advance();
+					this.addToken(TokenType.AND, "&&", startLine, startColumn);
+				} else {
+					throw new LexerError("Unexpected character '&'", startLine, startColumn);
+				}
+				break;
+
+			case "|":
+				if (this.current() === "|") {
+					this.advance();
+					this.addToken(TokenType.OR, "||", startLine, startColumn);
+				} else {
+					throw new LexerError("Unexpected character '|'", startLine, startColumn);
 				}
 				break;
 
 			case "<":
 				if (this.current() === "=") {
 					this.advance();
-					this.addToken(TokenType.LTE, "<=");
+					this.addToken(TokenType.LTE, "<=", startLine, startColumn);
 				} else {
-					this.addToken(TokenType.LT, "<");
+					this.addToken(TokenType.LT, "<", startLine, startColumn);
 				}
 				break;
 
 			case ">":
 				if (this.current() === "=") {
 					this.advance();
-					this.addToken(TokenType.GTE, ">=");
+					this.addToken(TokenType.GTE, ">=", startLine, startColumn);
 				} else {
-					this.addToken(TokenType.GT, ">");
+					this.addToken(TokenType.GT, ">", startLine, startColumn);
 				}
 				break;
 
 			default:
 				if (this.isDigit(ch)) {
-					this.readNumber(ch);
+					this.readNumber(ch, startLine, startColumn);
 				} else if (this.isAlpha(ch)) {
-					this.readIdentifier(ch);
+					this.readIdentifier(ch, startLine, startColumn);
 				} else {
-					throw new Error(
-						`[Lexer] Line ${this.line}: Unknown character '${ch}'`,
-					);
+					throw new LexerError(`Unexpected character '${ch}'`, startLine, startColumn);
 				}
 		}
 	}
 
-	readNumber(first) {
+	readNumber(first, startLine, startColumn) {
 		let num = first;
 		while (!this.isAtEnd() && this.isDigit(this.current())) {
 			num += this.advance();
@@ -204,17 +250,30 @@ class Lexer {
 				num += this.advance();
 			}
 		}
-		this.addToken(TokenType.NUMBER, parseFloat(num));
+		this.addToken(TokenType.NUMBER, parseFloat(num), startLine, startColumn);
 	}
 
-	readIdentifier(first) {
+	readString(startLine, startColumn) {
+		const valueStart = this.pos;
+		while (!this.isAtEnd() && this.current() !== '"') {
+			this.advance();
+		}
+		if (this.isAtEnd()) {
+			throw new LexerError("Unterminated string literal", startLine, startColumn);
+		}
+		const value = this.source.slice(valueStart, this.pos);
+		this.advance();
+		this.addToken(TokenType.STRING, value, startLine, startColumn);
+	}
+
+	readIdentifier(first, startLine, startColumn) {
 		let word = first;
 		while (!this.isAtEnd() && this.isAlphaNum(this.current())) {
 			word += this.advance();
 		}
 		const type = KEYWORDS[word] ?? TokenType.IDENTIFIER;
-		this.addToken(type, word);
+		this.addToken(type, word, startLine, startColumn);
 	}
 }
 
-module.exports = { Lexer, Token, TokenType };
+module.exports = { Lexer, Token, TokenType, LexerError };
