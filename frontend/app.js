@@ -68,12 +68,28 @@ async function runProgram() {
 
 		const payload = await response.json();
 
-		if (!response.ok) {
-			throw new Error(payload.error || "Compiler execution failed.");
+		if (!response.ok || payload.success === false) {
+			const errorText = payload.errors
+				? payload.errors.map((error) => {
+					const location = error.line && error.column
+						? `Line ${error.line}, Column ${error.column}`
+						: "Unknown location";
+
+					const snippet = error.snippet
+						? `\n${error.snippet}\n${error.pointer || ""}`
+						: "";
+
+					return `[${error.phase || payload.phase || "error"}] ${location}: ${error.message}${snippet}`;
+				}).join("\n\n")
+				: payload.error || "Compiler execution failed.";
+
+			setOutput(errorText);
+			setStatus("Run failed", true);
+			return;
 		}
 
 		const outputText = payload.output || "(no output)";
-		const symbolTable = JSON.stringify(payload.symbolTable, null, 2);
+		const symbolTable = JSON.stringify(payload.symbolTable || {}, null, 2);
 
 		setOutput(`${outputText}\n\nSymbol Table:\n${symbolTable}`);
 		setStatus("Run complete");
