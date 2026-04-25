@@ -1,24 +1,32 @@
 const { Evaluator } = require("./evaluator");
 
-class Interpreter {
-  constructor(evaluator = new Evaluator()) {
+class Interpreter 
+{
+  constructor(evaluator = new Evaluator(), sourceCode = "", userInput = "") 
+  {
     this.evaluator = evaluator;
+    this.sourceCode = sourceCode;
+    this.userInput = userInput;
     this.reset();
   }
 
-  reset() {
+  reset() 
+  {
     this.symbolTable = Object.create(null);
     this.outputValues = [];
   }
 
-  run(program) {
+  run(program) 
+  {
     const result = this.interpret(program);
 
-    if (!result.success) {
-      throw new Error(result.error);
+    if (!result.success) 
+      {
+      throw result.error;
     }
 
-    return {
+    return 
+    {
       success: true,
       output: result.output.map((value) => String(value)).join("\n"),
       outputLines: result.output.map((value) => String(value)),
@@ -27,122 +35,238 @@ class Interpreter {
       memory: { ...result.memory }
     };
   }
-
-  interpret(program) {
+  
+  interpret(program) 
+  {
     this.reset();
 
-    try {
-      if (!program || program.type !== "Program" || !Array.isArray(program.body)) {
+    try 
+    {
+      if (!program || program.type !== "Program" || !Array.isArray(program.body)) 
+      {
         throw new Error("Invalid AST: root must be Program with a body array.");
       }
 
-      for (const statement of program.body) {
+      for (const statement of program.body) 
+      {
         this.execute(statement);
       }
 
       return this.snapshot(true);
-    } catch (error) {
-      return this.snapshot(false, error.message);
+    } 
+    catch (error) 
+    {
+      if (error && error.phase) 
+      {
+        return this.snapshot(false, error);
+      }
+
+      return this.snapshot
+      (
+        false,
+        this.runtimeError(error.message || String(error), null)
+      );
     }
   }
 
-  snapshot(success, error) {
-    const result = {
+  snapshot(success, error) 
+  {
+    const result = 
+    {
       success,
       memory: { ...this.symbolTable },
       output: [...this.outputValues]
     };
 
-    if (error) {
+    if (error) 
+    {
       result.error = error;
     }
 
     return result;
   }
 
-  execute(node) {
-    if (!node || !node.type) {
-      throw new Error("[Interpreter] Invalid statement node.");
+  execute(node) 
+  {
+    if (!node || !node.type) 
+    {
+      throw this.runtimeError("Invalid statement node.", node);
     }
 
-    switch (node.type) {
-      case "VariableDeclaration": {
+    switch (node.type) 
+    {
+      case "VariableDeclaration": 
+      {
         const identifier = this.getIdentifier(node);
         const initializer = node.initializer ?? node.value;
 
-        if (!initializer) {
-          throw new Error(`[Interpreter] Variable '${identifier}' must have a value.`);
+        if (!initializer) 
+        {
+          throw this.runtimeError(`Variable '${identifier}' must have a value.`, node);
         }
 
-        if (identifier in this.symbolTable) {
-          throw new Error(`[Interpreter] Variable '${identifier}' is already declared.`);
+        if (Object.prototype.hasOwnProperty.call(this.symbolTable, identifier)) 
+        {
+          throw this.runtimeError(`Variable '${identifier}' is already declared.`, node);
         }
 
-        const value = this.evaluator.evaluate(initializer, this.symbolTable);
+        let value;
+        if (initializer.type === "CallExpression")
+        {
+          value = this.handleCall(initializer);
+        } 
+        else 
+        {
+          try 
+          {
+            value = this.evaluator.evaluate(initializer, this.symbolTable);
+          } 
+          catch (err) 
+          {
+            throw this.runtimeError(err.message, initializer);
+          }
+        }
         this.symbolTable[identifier] = value;
         return value;
       }
 
-      case "AssignmentStatement": {
+      case "AssignmentStatement": 
+      {
         const identifier = this.getIdentifier(node);
         const assignmentValue = node.value ?? node.initializer;
 
-        if (!(identifier in this.symbolTable)) {
-          throw new Error(`[Interpreter] Variable '${identifier}' is not defined.`);
+        if (!(identifier in this.symbolTable)) 
+        { 
+          throw this.runtimeError(`Variable '${identifier}' is not defined.`, node);
         }
 
-        if (!assignmentValue) {
-          throw new Error(`[Interpreter] Assignment for '${identifier}' must have a value.`);
+        if (!assignmentValue) 
+        {
+          throw this.runtimeError(`Assignment for '${identifier}' must have a value.`, node);
         }
 
-        const value = this.evaluator.evaluate(assignmentValue, this.symbolTable);
+        let value;
+
+        if (assignmentValue.type === "CallExpression") 
+        {
+          value = this.handleCall(assignmentValue);
+        } 
+        else 
+        {
+          try 
+          {
+            value = this.evaluator.evaluate(assignmentValue, this.symbolTable);
+          } 
+          catch (err) 
+          {
+            throw this.runtimeError(err.message, assignmentValue);
+          }
+        }
+
         this.symbolTable[identifier] = value;
         return value;
       }
 
-      case "PrintStatement": {
-        if (!node.expression) {
-          throw new Error("[Interpreter] PrintStatement must have an expression.");
+      case "PrintStatement": 
+      {
+        if (!node.expression) 
+        {
+          throw this.runtimeError("PrintStatement must have an expression.", node);
         }
 
-        const value = this.evaluator.evaluate(node.expression, this.symbolTable);
+        let value;
+
+        if (node.expression.type === "CallExpression") 
+        {
+          value = this.handleCall(node.expression);
+        } 
+        else 
+        {
+          try 
+          {
+            value = this.evaluator.evaluate(node.expression, this.symbolTable);
+          } 
+          catch (err) 
+          {
+            throw this.runtimeError(err.message, node.expression);
+          }
+        }
+
         this.outputValues.push(value);
         return value;
       }
 
-      case "BlockStatement": {
+      case "BlockStatement": 
+      {
+        const previous = this.symbolTable;
+
+        this.symbolTable = Object.create(previous);
+
         let lastValue = null;
 
-        for (const statement of node.body) {
-          lastValue = this.execute(statement);
+        try 
+        {
+          for (const statement of node.body) 
+          {
+            lastValue = this.execute(statement);
+          }
+        } 
+        finally 
+        {
+          this.symbolTable = previous;
         }
 
         return lastValue;
       }
 
-      case "IfStatement": {
-        const condition = this.evaluator.evaluate(node.condition, this.symbolTable);
+      case "IfStatement": 
+      {
+        let condition;
+        try 
+        {
+          condition = this.evaluator.evaluate(node.condition, this.symbolTable);
+        } 
+        catch (err) 
+        {
+          throw this.runtimeError(err.message, node.condition);
+        }
 
-        if (condition) {
+        if (condition) 
+        {
           return this.execute(node.thenBranch);
         }
 
-        if (node.elseBranch) {
+        if (node.elseBranch) 
+        {
           return this.execute(node.elseBranch);
         }
 
         return null;
       }
 
-      case "WhileStatement": {
+      case "WhileStatement": 
+      {
         let iterations = 0;
         let lastValue = null;
 
-        while (this.evaluator.evaluate(node.condition, this.symbolTable)) {
-          iterations += 1;
+        while (true) 
+        {
+          let condition;
+          try 
+          {
+            condition = this.evaluator.evaluate(node.condition, this.symbolTable);
+          } 
+          catch (err) 
+          {
+            throw this.runtimeError(err.message, node.condition);
+          }
 
-          if (iterations > 10000) {
-            throw new Error("[Interpreter] Loop iteration limit exceeded.");
+          if (!condition) break;
+            iterations += 1;
+
+          if (iterations > 10000) 
+          {
+            throw this.runtimeError("Loop iteration limit exceeded.", node);
           }
 
           lastValue = this.execute(node.body);
@@ -151,22 +275,139 @@ class Interpreter {
         return lastValue;
       }
 
-      case "ExpressionStatement":
-        return this.evaluator.evaluate(node.expression, this.symbolTable);
+      case "ExpressionStatement": 
+      {
+        if (node.expression.type === "CallExpression") 
+        {
+          return this.handleCall(node.expression);
+        }
+
+        try 
+        {
+          return this.evaluator.evaluate(node.expression, this.symbolTable);
+        } 
+        catch (err) 
+        {
+          throw this.runtimeError(err.message, node.expression);
+        }
+      }
 
       default:
-        throw new Error(`[Interpreter] Unsupported node type '${node.type}'.`);
+        throw this.runtimeError(`Unsupported node type '${node.type}'.`, node);
     }
   }
 
-  getIdentifier(node) {
+  getIdentifier(node) 
+  {
     const identifier = typeof node.identifier === "string" ? node.identifier : node.name;
 
-    if (typeof identifier !== "string" || identifier.trim() === "") {
-      throw new Error("[Interpreter] Invalid variable name.");
+    if (typeof identifier !== "string" || identifier.trim() === "") 
+    {
+      throw this.runtimeError("Invalid variable name.", node);
     }
 
     return identifier;
+  }
+
+  handleCall(node) 
+  {
+    const calleeName = node.callee.name;
+
+    const args = node.arguments.map(arg => 
+    {
+      try 
+      {
+        return this.evaluator.evaluate(arg, this.symbolTable);
+      } 
+      catch (err) 
+      {
+        throw this.runtimeError(err.message, arg);
+      }
+    });
+
+    if (calleeName === "print") 
+    {
+      const value = args[0];
+      this.outputValues.push(value);
+      return value;
+    }
+
+    if (calleeName === "input") 
+    {
+      return this.userInput;
+    }
+
+    if (calleeName === "len") 
+    {
+      const val = args[0];
+
+      if (typeof val !== "string") 
+      {
+        throw this.runtimeError("len() expects a string.", node);
+      }
+
+      return val.length;
+    }
+
+    if (calleeName === "toInt") 
+    {
+      const val = args[0];
+
+      if (typeof val === "number") 
+      {
+        return val;
+      }
+
+      if (typeof val === "string") 
+      {
+
+        if (val.length === 1) 
+        {
+          return val.charCodeAt(0);
+        }
+
+        const num = parseInt(val);
+
+        if (!isNaN(num)) 
+        {
+          return num;
+        }
+      }
+
+      throw this.runtimeError("toInt() cannot convert value to integer.", node);
+    }
+
+    throw this.runtimeError(`Unknown function '${calleeName}'.`, node);
+  }
+
+  runtimeError(message, node) 
+  {
+    const line = node?.loc?.start?.line ?? null;
+    const column = node?.loc?.start?.column ?? null;
+
+    let snippet = "";
+    let pointer = "";
+
+    if (line && this.sourceCode) 
+    {
+      const lines = this.sourceCode.split("\n");
+      snippet = lines[line - 1] || "";
+
+      if (column) 
+      {
+        pointer = " ".repeat(column - 1) + "^";
+      }
+    }
+
+    return 
+    {
+      phase: "runtime",
+      message: message.replace("[Evaluator] ", ""),
+      line,
+      column,
+      snippet,
+      pointer
+    };
   }
 }
 

@@ -19,7 +19,9 @@ class Evaluator {
 
       case "BinaryExpression":
         return this.evaluateBinary(node, symbolTable);
-
+      
+      case "LogicalExpression":
+        return this.evaluateLogical(node, symbolTable);
       default:
         throw new Error(`[Evaluator] Unsupported expression type '${node.type}'.`);
     }
@@ -40,19 +42,37 @@ class Evaluator {
       case TokenType.MINUS:
       case "-":
         return -value;
+      
+      case TokenType.BANG:
+      case "!":
+        if (typeof value !== "boolean") {
+          throw new Error("[Evaluator] Operand of ! must be boolean.");
+        }
+        return !value;
+
       default:
         throw new Error(`[Evaluator] Unsupported unary operator '${node.operator}'.`);
     }
   }
 
-  evaluateBinary(node, symbolTable) {
+  evaluateBinary(node, symbolTable) 
+  {
     const left = this.evaluate(node.left, symbolTable);
     const right = this.evaluate(node.right, symbolTable);
 
     switch (node.operator) {
       case TokenType.PLUS:
-      case "+":
-        return left + right;
+      case "+":{
+        if (typeof left === "string" || typeof right === "string") {
+          return String(left) + String(right);
+        }
+
+        if (typeof left === "number" && typeof right === "number") {
+          return left + right;
+        }
+
+        throw new Error("[Evaluator] Invalid operands for '+' operator.");
+      }
       case TokenType.MINUS:
       case "-":
         return left - right;
@@ -92,6 +112,44 @@ class Evaluator {
       default:
         throw new Error(`[Evaluator] Unsupported binary operator '${node.operator}'.`);
     }
+  }
+
+  evaluateLogical(node, symbolTable) {
+    const left = this.evaluate(node.left, symbolTable);
+
+    if (node.operator === TokenType.AND) {
+      if (typeof left !== "boolean") {
+        throw new Error("[Evaluator] Left operand of && must be boolean.");
+      }
+
+      if (!left) return false;
+
+      const right = this.evaluate(node.right, symbolTable);
+
+      if (typeof right !== "boolean") {
+        throw new Error("[Evaluator] Right operand of && must be boolean.");
+      }
+
+      return left && right;
+    }
+
+    if (node.operator === TokenType.OR) {
+      if (typeof left !== "boolean") {
+        throw new Error("[Evaluator] Left operand of || must be boolean.");
+      }
+
+      if (left) return true;
+
+      const right = this.evaluate(node.right, symbolTable);
+
+      if (typeof right !== "boolean") {
+        throw new Error("[Evaluator] Right operand of || must be boolean.");
+      }
+
+      return left || right;
+    }
+
+    throw new Error(`[Evaluator] Unsupported logical operator '${node.operator}'.`);
   }
 }
 

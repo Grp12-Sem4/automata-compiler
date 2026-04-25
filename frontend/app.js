@@ -58,19 +58,23 @@ async function runProgram() {
 	setOutput("Compiling program...");
 
 	try {
+		const userInput = prompt("Enter input:");
 		const response = await fetch("/run", {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 			},
-			body: JSON.stringify({ code: editor.getValue() }),
+			body: JSON.stringify({code: editor.getValue(),userInput}),
 		});
 
 		const payload = await response.json();
 
 		if (!response.ok || payload.success === false) {
-			const errorText = payload.errors
-				? payload.errors.map((error) => {
+			let errorText = "";
+
+			if (payload.errors && Array.isArray(payload.errors)) {
+				// multiple errors (lexer/parser/semantic)
+				errorText = payload.errors.map((error) => {
 					const location = error.line && error.column
 						? `Line ${error.line}, Column ${error.column}`
 						: "Unknown location";
@@ -79,9 +83,28 @@ async function runProgram() {
 						? `\n${error.snippet}\n${error.pointer || ""}`
 						: "";
 
-					return `[${error.phase || payload.phase || "error"}] ${location}: ${error.message}${snippet}`;
-				}).join("\n\n")
-				: payload.error || "Compiler execution failed.";
+					return `[${error.phase || "error"}] ${location}: ${error.message}${snippet}`;
+				}).join("\n\n");
+
+			} else if (payload.error && typeof payload.error === "object") {
+				// single runtime error
+				const error = payload.error;
+
+				const location = error.line && error.column
+					? `Line ${error.line}, Column ${error.column}`
+					: "Unknown location";
+
+				const snippet = error.snippet
+				? `\n${error.snippet}\n${error.pointer || ""}`
+				: "";
+
+			errorText = `[${error.phase || "error"}] ${location}: ${error.message}${snippet}`;
+		
+
+			} else {
+				// fallback
+				errorText = payload.error || "Compiler execution failed.";
+			}
 
 			setOutput(errorText);
 			setStatus("Run failed", true);

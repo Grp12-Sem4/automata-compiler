@@ -4,7 +4,8 @@ const { Interpreter } = require("../modules/interpreter");
 const { Evaluator } = require("../modules/evaluator");
 const { SemanticAnalyzer } = require("../modules/semanticAnalyzer");
 
-function runCompiler(sourceCode) {
+function runCompiler(sourceCode, userInput = "")  
+{
 	if (typeof sourceCode !== "string") {
 		throw new Error("Source code must be a string.");
 	}
@@ -29,7 +30,7 @@ function runCompiler(sourceCode) {
 	}
 
 	const evaluator = new Evaluator();
-	const interpreter = new Interpreter(evaluator);
+	const interpreter = new Interpreter(evaluator, sourceCode, userInput);
 	const result = interpreter.run(ast);
 
 	return {

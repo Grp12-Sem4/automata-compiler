@@ -4,9 +4,10 @@ const { runCompiler } = require("../pipeline/runCompiler");
 const router = express.Router();
 
 router.post("/run", (req, res) => {
+	
 	try {
-		const { code = "" } = req.body || {};
-		const result = runCompiler(code);
+		const { code = "", userInput = "" } = req.body || {};
+		const result = runCompiler(code, userInput);
 		console.log(result);
 		console.log("\n\n");
 		for (let i = 0; i < 5; i++) {
@@ -15,7 +16,7 @@ router.post("/run", (req, res) => {
 		console.log("\n\n");
 		res.json(result);
 	} catch (error) {
-		res.status(400).json({ error: error.message });
+		res.status(400).json({ error });
 	}
 });
 
