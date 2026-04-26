@@ -145,7 +145,10 @@ class Interpreter {
 
 				// Climb the prototype chain to find the correct scope
 				let targetScope = this.symbolTable;
-				while (targetScope !== null && !Object.prototype.hasOwnProperty.call(targetScope, identifier)) {
+				while (
+					targetScope !== null &&
+					!Object.prototype.hasOwnProperty.call(targetScope, identifier)
+				) {
 					targetScope = Object.getPrototypeOf(targetScope);
 				}
 
@@ -313,14 +316,14 @@ class Interpreter {
 			}
 
 			if (typeof val === "string") {
-				if (val.length === 1) {
-					return val.charCodeAt(0);
-				}
-
-				const num = parseInt(val);
+				const num = parseInt(val, 10);
 
 				if (!isNaN(num)) {
 					return num;
+				}
+
+				if (val.length === 1) {
+					return val.charCodeAt(0);
 				}
 			}
 
