@@ -26,13 +26,20 @@ class Parser {
 			body.push(this.statement());
 		}
 
-		const endToken = body.length > 0 ? this.getNodeEndToken(body[body.length - 1]) : startToken;
+		const endToken =
+			body.length > 0
+				? this.getNodeEndToken(body[body.length - 1])
+				: startToken;
 		return this.createNode("Program", { body }, startToken, endToken);
 	}
 
 	statement() {
 		if (this.match(TokenType.LET)) {
-			return this.variableDeclaration(this.previous());
+			return this.variableDeclaration("let");
+		}
+
+		if (this.match(TokenType.CONST)) {
+			return this.variableDeclaration("const");
 		}
 
 		if (this.match(TokenType.PRINT)) {
@@ -58,29 +65,30 @@ class Parser {
 		return this.expressionStatement();
 	}
 
-	variableDeclaration(letToken) {
+	variableDeclaration(kind = "let") {
 		const identifier = this.consume(
 			TokenType.IDENTIFIER,
-			"Expected variable name after 'let'.",
+			`Expected variable name after '${kind}'.`,
 		);
 
 		this.consume(TokenType.ASSIGN, "Expected '=' after variable name.");
 
 		const initializer = this.expression();
-		const semicolon = this.consume(
+		this.consume(
 			TokenType.SEMICOLON,
 			"Expected ';' after variable declaration.",
 		);
 
-		return this.createNode(
-			"VariableDeclaration",
-			{
-				identifier: identifier.value,
-				initializer,
+		return {
+			type: "VariableDeclaration",
+			kind,
+			identifier: identifier.value,
+			initializer,
+			loc: {
+				line: identifier.line,
+				column: identifier.column,
 			},
-			letToken,
-			semicolon,
-		);
+		};
 	}
 
 	assignmentStatement() {
@@ -141,7 +149,9 @@ class Parser {
 				elseBranch,
 			},
 			ifToken,
-			elseBranch ? this.getNodeEndToken(elseBranch) : this.getNodeEndToken(thenBranch),
+			elseBranch
+				? this.getNodeEndToken(elseBranch)
+				: this.getNodeEndToken(thenBranch),
 		);
 	}
 
@@ -171,7 +181,10 @@ class Parser {
 			body.push(this.statement());
 		}
 
-		const closeBrace = this.consume(TokenType.RBRACE, "Expected '}' after block.");
+		const closeBrace = this.consume(
+			TokenType.RBRACE,
+			"Expected '}' after block.",
+		);
 
 		return this.createNode("BlockStatement", { body }, openBrace, closeBrace);
 	}
@@ -385,12 +398,7 @@ class Parser {
 
 		if (this.match(TokenType.IDENTIFIER, TokenType.INPUT)) {
 			const token = this.previous();
-			return this.createNode(
-				"Identifier",
-				{ name: token.value },
-				token,
-				token,
-			);
+			return this.createNode("Identifier", { name: token.value }, token, token);
 		}
 
 		if (this.match(TokenType.LPAREN)) {
@@ -438,9 +446,10 @@ class Parser {
 			return { line: null, column: null };
 		}
 
-		const rawValue = token.value === null || token.value === undefined
-			? token.type
-			: token.value;
+		const rawValue =
+			token.value === null || token.value === undefined
+				? token.type
+				: token.value;
 		const text =
 			token.type === TokenType.STRING ? `"${rawValue}"` : String(rawValue);
 

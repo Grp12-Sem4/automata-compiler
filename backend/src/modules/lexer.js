@@ -1,5 +1,6 @@
 const TokenType = {
 	LET: "LET",
+	CONST: "CONST",
 	PRINT: "PRINT",
 	IF: "IF",
 	ELSE: "ELSE",
@@ -39,6 +40,7 @@ const TokenType = {
 
 const KEYWORDS = {
 	let: TokenType.LET,
+	const: TokenType.CONST,
 	print: TokenType.PRINT,
 	if: TokenType.IF,
 	else: TokenType.ELSE,
@@ -197,7 +199,11 @@ class Lexer {
 					this.advance();
 					this.addToken(TokenType.AND, "&&", startLine, startColumn);
 				} else {
-					throw new LexerError("Unexpected character '&'", startLine, startColumn);
+					throw new LexerError(
+						"Unexpected character '&'",
+						startLine,
+						startColumn,
+					);
 				}
 				break;
 
@@ -206,7 +212,11 @@ class Lexer {
 					this.advance();
 					this.addToken(TokenType.OR, "||", startLine, startColumn);
 				} else {
-					throw new LexerError("Unexpected character '|'", startLine, startColumn);
+					throw new LexerError(
+						"Unexpected character '|'",
+						startLine,
+						startColumn,
+					);
 				}
 				break;
 
@@ -234,7 +244,11 @@ class Lexer {
 				} else if (this.isAlpha(ch)) {
 					this.readIdentifier(ch, startLine, startColumn);
 				} else {
-					throw new LexerError(`Unexpected character '${ch}'`, startLine, startColumn);
+					throw new LexerError(
+						`Unexpected character '${ch}'`,
+						startLine,
+						startColumn,
+					);
 				}
 		}
 	}
@@ -259,7 +273,11 @@ class Lexer {
 			this.advance();
 		}
 		if (this.isAtEnd()) {
-			throw new LexerError("Unterminated string literal", startLine, startColumn);
+			throw new LexerError(
+				"Unterminated string literal",
+				startLine,
+				startColumn,
+			);
 		}
 		const value = this.source.slice(valueStart, this.pos);
 		this.advance();

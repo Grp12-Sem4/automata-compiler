@@ -57,6 +57,8 @@ async function runProgram() {
 	setStatus("Running...");
 	setOutput("Compiling program...");
 
+	monaco.editor.setModelMarkers(editor.getModel(), "compiler", []);
+
 	try {
 		const code = editor.getValue();
 		let userInput = "";
@@ -85,6 +87,24 @@ async function runProgram() {
 
 		if (!response.ok || payload.success === false) {
 			let errorText = "";
+			const markers = [];
+
+			const getEndColumn = (line, column) => {
+				let endCol = column + 1;
+				const model = editor.getModel();
+				if (model && line <= model.getLineCount()) {
+					const lineContent = model.getLineContent(line);
+					const textFromError = lineContent.substring(column - 1);
+
+					const match = textFromError.match(
+						/^([a-zA-Z0-9_]+|[^a-zA-Z0-9_\s]+)/,
+					);
+					if (match) {
+						endCol = column + match[1].length;
+					}
+				}
+				return endCol;
+			};
 
 			if (payload.errors && Array.isArray(payload.errors)) {
 				errorText = payload.errors
@@ -97,6 +117,17 @@ async function runProgram() {
 						const snippet = error.snippet
 							? `\n${error.snippet}\n${error.pointer || ""}`
 							: "";
+
+						if (error.line && error.column) {
+							markers.push({
+								startLineNumber: error.line,
+								startColumn: error.column,
+								endLineNumber: error.line,
+								endColumn: getEndColumn(error.line, error.column),
+								message: `[${error.phase || "error"}] ${error.message}`,
+								severity: monaco.MarkerSeverity.Error,
+							});
+						}
 
 						return `[${error.phase || "error"}] ${location}: ${error.message}${snippet}`;
 					})
@@ -113,9 +144,24 @@ async function runProgram() {
 					? `\n${error.snippet}\n${error.pointer || ""}`
 					: "";
 
+				if (error.line && error.column) {
+					markers.push({
+						startLineNumber: error.line,
+						startColumn: error.column,
+						endLineNumber: error.line,
+						endColumn: getEndColumn(error.line, error.column),
+						message: `[${error.phase || "error"}] ${error.message}`,
+						severity: monaco.MarkerSeverity.Error,
+					});
+				}
+
 				errorText = `[${error.phase || "error"}] ${location}: ${error.message}${snippet}`;
 			} else {
 				errorText = payload.error || "Compiler execution failed.";
+			}
+
+			if (markers.length > 0) {
+				monaco.editor.setModelMarkers(editor.getModel(), "compiler", markers);
 			}
 
 			setOutput(errorText);
