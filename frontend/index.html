@@ -1,47 +1,56 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mini Compiler Playground</title>
-    <link rel="stylesheet" href="./style.css" />
-  </head>
-  <body>
-    <div class="app-shell">
-      <header class="topbar">
-        <div class="brand">
-          <span class="brand__dot"></span>
-          <div>
-            <p class="brand__title">Mini Compiler</p>
-            <p class="brand__subtitle">Lexer -> Parser -> Interpreter -> Evaluator</p>
-          </div>
-        </div>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Mini Compiler Playground</title>
+		<link rel="stylesheet" href="./style.css" />
+	</head>
+	<body>
+		<div class="app-shell">
+			<header class="topbar">
+				<div class="brand">
+					<span class="brand__dot"></span>
+					<div>
+						<p class="brand__title">Mini Compiler</p>
+						<p class="brand__subtitle">
+							Lexer -> Parser -> Interpreter -> Evaluator
+						</p>
+					</div>
+				</div>
 
-        <div class="actions">
-          <button id="runButton" class="action action--primary" type="button">Run</button>
-          <button id="saveButton" class="action" type="button">Save</button>
-        </div>
-      </header>
+				<div class="actions">
+					<button id="runButton" class="action action--primary" type="button">
+						Run
+					</button>
+					<button id="saveButton" class="action" type="button">Save</button>
+				</div>
+			</header>
 
-      <main class="workspace">
-        <section class="panel panel--editor">
-          <div class="panel__header">
-            <span>main.code</span>
-          </div>
-          <div id="editor" class="editor"></div>
-        </section>
+			<main class="workspace">
+				<section class="panel panel--editor">
+					<div class="panel__header">
+						<span>main.code</span>
+					</div>
+					<div id="editor" class="editor"></div>
+				</section>
 
-        <section class="panel panel--output">
-          <div class="panel__header">
-            <span>Output</span>
-            <span id="statusText" class="status">Ready</span>
-          </div>
-          <pre id="outputPanel" class="output"></pre>
-        </section>
-      </main>
-    </div>
+				<section class="panel panel--output">
+					<div class="panel__header">
+						<div class="tabs" id="outputTabs">
+							<button class="tab active" data-target="execution">Output</button>
+							<button class="tab" data-target="tokens">Tokens</button>
+							<button class="tab" data-target="ast">AST</button>
+							<button class="tab" data-target="memory">Memory</button>
+						</div>
+						<span id="statusText" class="status">Ready</span>
+					</div>
+					<pre id="outputPanel" class="output"></pre>
+				</section>
+			</main>
+		</div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
-    <script src="./app.js"></script>
-  </body>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
+		<script src="./app.js"></script>
+	</body>
 </html>

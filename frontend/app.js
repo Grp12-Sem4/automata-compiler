@@ -4,21 +4,56 @@ const runButton = document.getElementById("runButton");
 const saveButton = document.getElementById("saveButton");
 
 const starterProgram = [
-	"let x = 10;",
-	"let y = 20;",
-	"print x + y;",
+	"// --- 1. Variables & Basic Arithmetic ---",
+	"const a = 10;",
+	"let b = 3;",
+	'print("Basic Math (10 + 3):");',
+	"print(a + b);",
+	'print("Modulo (10 % 3):");',
+	"print(a % b);",
 	"",
-	"if (x < y) {",
-	"  print y - x;",
+	"// --- 2. Strings & String Functions ---",
+	'let greeting = "Hello";',
+	'let target = "Compiler";',
+	'print("String Concatenation:");',
+	'print(greeting + " " + target);',
+	"",
+	'print("Length of greeting:");',
+	"print(len(greeting));",
+	"",
+	"// --- 3. Booleans & Logical Operators ---",
+	"let isReady = true;",
+	"let isBroken = !isReady;",
+	"",
+	"if (a > b && isReady) {",
+	'    print("Logic works perfectly!");',
+	"} else {",
+	'    print("This should not print.");',
 	"}",
 	"",
-	"while (x < 13) {",
-	"  x = x + 1;",
-	"  print x;",
+	"// --- 4. Loops & Reassignment ---",
+	'print("While loop counting 0 to 2:");',
+	"let counter = 0;",
+	"while (counter < 3) {",
+	"    print(counter);",
+	"    counter = counter + 1;",
 	"}",
+	"",
+	"// --- 5. Input & Type Conversion ---",
+	"// Note: When it hits input(), it will ask you for a value in the browser popup!",
+	'print("Type a number in the input prompt:");',
+	"let userStr = input();",
+	"let userNum = toInt(userStr);",
+	"",
+	'print("You entered:");',
+	"print(userNum);",
+	'print("Your number multiplied by 10 is:");',
+	"print(userNum * 10);",
 ].join("\n");
 
 let editor;
+let currentTab = "execution";
+let lastPayload = null;
 
 function setStatus(message, isError = false) {
 	statusText.textContent = message;
@@ -46,6 +81,25 @@ function saveProgram() {
 	link.click();
 	URL.revokeObjectURL(link.href);
 	setStatus("Saved locally");
+}
+
+function renderOutputView() {
+	if (!lastPayload) return;
+
+	if (lastPayload.success === false) {
+		setOutput(lastPayload.error.message || "An error occurred.");
+		return;
+	}
+
+	if (currentTab === "execution") {
+		setOutput(lastPayload.output || "(no output)");
+	} else if (currentTab === "tokens") {
+		setOutput(JSON.stringify(lastPayload.tokens, null, 2));
+	} else if (currentTab === "ast") {
+		setOutput(JSON.stringify(lastPayload.ast, null, 2));
+	} else if (currentTab === "memory") {
+		setOutput(JSON.stringify(lastPayload.symbolTable || {}, null, 2));
+	}
 }
 
 async function runProgram() {
@@ -163,16 +217,14 @@ async function runProgram() {
 			if (markers.length > 0) {
 				monaco.editor.setModelMarkers(editor.getModel(), "compiler", markers);
 			}
-
+			lastPayload = null;
 			setOutput(errorText);
 			setStatus("Run failed", true);
 			return;
 		}
 
-		const outputText = payload.output || "(no output)";
-		const symbolTable = JSON.stringify(payload.symbolTable || {}, null, 2);
-
-		setOutput(`${outputText}\n\nSymbol Table:\n${symbolTable}`);
+		lastPayload = payload;
+		renderOutputView();
 		setStatus("Run complete");
 	} catch (error) {
 		setOutput(error.message);
@@ -211,3 +263,17 @@ if (!window.require) {
 
 runButton.addEventListener("click", runProgram);
 saveButton.addEventListener("click", saveProgram);
+
+document.getElementById("outputTabs").addEventListener("click", (e) => {
+	if (e.target.classList.contains("tab")) {
+		// Update active class
+		document
+			.querySelectorAll(".tab")
+			.forEach((t) => t.classList.remove("active"));
+		e.target.classList.add("active");
+
+		// Switch tab and render
+		currentTab = e.target.getAttribute("data-target");
+		renderOutputView();
+	}
+});

@@ -53,6 +53,7 @@ const KEYWORDS = {
 class LexerError extends Error {
 	constructor(message, line, column) {
 		super(message);
+		this.message = message;
 		this.phase = "lexical";
 		this.line = line;
 		this.column = column;

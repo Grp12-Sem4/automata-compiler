@@ -3,6 +3,7 @@ const { TokenType } = require("./lexer");
 class ParserError extends Error {
 	constructor(message, token) {
 		super(message);
+		this.message = message;
 		this.name = "ParserError";
 		this.phase = "syntax";
 		this.line = token?.line ?? null;
