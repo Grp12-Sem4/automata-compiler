@@ -54,6 +54,10 @@ const starterProgram = [
 let editor;
 let currentTab = "execution";
 let lastPayload = null;
+let network = null;
+const astModal = document.getElementById("astModal");
+const closeModalBtn = document.getElementById("closeModalBtn");
+const astModalNetwork = document.getElementById("astModalNetwork");
 
 function setStatus(message, isError = false) {
 	statusText.textContent = message;
@@ -83,22 +87,101 @@ function saveProgram() {
 	setStatus("Saved locally");
 }
 
+function drawVisualAST(astRoot) {
+	let nodes = [];
+	let edges = [];
+	let nodeId = 0;
+
+	function traverse(node, parentId = null, edgeLabel = "") {
+		if (!node || typeof node !== "object" || !node.type) return;
+
+		const currentId = ++nodeId;
+		let label = node.type;
+
+		if (node.type === "Identifier")
+			label += `\n(${node.name || node.identifier})`;
+		if (node.type === "Literal") label += `\n(${node.value})`;
+		if (node.type === "VariableDeclaration")
+			label += `\n(${node.kind} ${node.identifier})`;
+		if (node.type === "BinaryExpression" || node.type === "LogicalExpression")
+			label += `\n(${node.operator})`;
+
+		nodes.push({
+			id: currentId,
+			label: label,
+			shape: "box",
+			color: { background: "#0e639c", border: "#1177bb" },
+			font: { color: "#ffffff", face: "Consolas" },
+		});
+
+		if (parentId !== null) {
+			edges.push({
+				from: parentId,
+				to: currentId,
+				label: edgeLabel,
+				font: { align: "middle", size: 10, color: "#8b949e" },
+				color: { color: "#8b949e" },
+				arrows: "to",
+			});
+		}
+
+		for (const key in node) {
+			if (["loc", "type", "startToken", "endToken"].includes(key)) continue;
+
+			const value = node[key];
+			if (Array.isArray(value)) {
+				value.forEach((child, index) =>
+					traverse(child, currentId, `${key}[${index}]`),
+				);
+			} else if (value && typeof value === "object") {
+				traverse(value, currentId, key);
+			}
+		}
+	}
+
+	traverse(astRoot);
+
+	const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+	const options = {
+		layout: {
+			hierarchical: {
+				direction: "UD",
+				sortMethod: "directed",
+				nodeSpacing: 150,
+			},
+		},
+		physics: { enabled: false }, // Disables bouncing to keep the tree stable
+		interaction: { dragNodes: true, dragView: true, zoomView: true },
+	};
+
+	if (network) network.destroy();
+	network = new vis.Network(astModalNetwork, data, options);
+}
+
 function renderOutputView() {
 	if (!lastPayload) return;
 
 	if (lastPayload.success === false) {
-		setOutput(lastPayload.error.message || "An error occurred.");
+		outputPanel.style.display = "block";
 		return;
 	}
 
-	if (currentTab === "execution") {
-		setOutput(lastPayload.output || "(no output)");
-	} else if (currentTab === "tokens") {
-		setOutput(JSON.stringify(lastPayload.tokens, null, 2));
-	} else if (currentTab === "ast") {
+	if (currentTab === "visual-ast") {
+		astModal.classList.add("active");
+		drawVisualAST(lastPayload.ast);
+
+		outputPanel.style.display = "block";
 		setOutput(JSON.stringify(lastPayload.ast, null, 2));
-	} else if (currentTab === "memory") {
-		setOutput(JSON.stringify(lastPayload.symbolTable || {}, null, 2));
+	} else {
+		outputPanel.style.display = "block";
+		if (currentTab === "execution")
+			setOutput(lastPayload.output || "(no output)");
+		else if (currentTab === "tokens")
+			setOutput(JSON.stringify(lastPayload.tokens, null, 2));
+		else if (currentTab === "ast")
+			setOutput(JSON.stringify(lastPayload.ast, null, 2));
+		else if (currentTab === "memory")
+			setOutput(JSON.stringify(lastPayload.symbolTable || {}, null, 2));
 	}
 }
 
@@ -276,4 +359,17 @@ document.getElementById("outputTabs").addEventListener("click", (e) => {
 		currentTab = e.target.getAttribute("data-target");
 		renderOutputView();
 	}
+});
+
+closeModalBtn.addEventListener("click", () => {
+	astModal.classList.remove("active");
+
+	document
+		.querySelectorAll(".tab")
+		.forEach((t) => t.classList.remove("active"));
+	const astTab = document.querySelector('[data-target="ast"]');
+	if (astTab) astTab.classList.add("active");
+
+	currentTab = "ast";
+	renderOutputView();
 });

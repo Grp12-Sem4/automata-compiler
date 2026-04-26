@@ -5,6 +5,10 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Mini Compiler Playground</title>
 		<link rel="stylesheet" href="./style.css" />
+		<script
+			type="text/javascript"
+			src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"
+		></script>
 	</head>
 	<body>
 		<div class="app-shell">
@@ -40,7 +44,8 @@
 						<div class="tabs" id="outputTabs">
 							<button class="tab active" data-target="execution">Output</button>
 							<button class="tab" data-target="tokens">Tokens</button>
-							<button class="tab" data-target="ast">AST</button>
+							<button class="tab" data-target="ast">AST (JSON)</button>
+							<button class="tab" data-target="visual-ast">Visual AST</button>
 							<button class="tab" data-target="memory">Memory</button>
 						</div>
 						<span id="statusText" class="status">Ready</span>
@@ -48,6 +53,15 @@
 					<pre id="outputPanel" class="output"></pre>
 				</section>
 			</main>
+		</div>
+		<div id="astModal" class="modal">
+			<div class="modal__header">
+				<span>Visual AST Graph</span>
+				<button id="closeModalBtn" class="action action--primary">
+					Close Graph
+				</button>
+			</div>
+			<div id="astModalNetwork" class="modal__body"></div>
 		</div>
 
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
