@@ -58,13 +58,27 @@ async function runProgram() {
 	setOutput("Compiling program...");
 
 	try {
-		const userInput = prompt("Enter input:");
+		const code = editor.getValue();
+		let userInput = "";
+
+		const cleanedCode = code.replace(/\/\/.*/g, "").replace(/"[^"]*"/g, "");
+
+		if (/\binput\s*\(/.test(cleanedCode)) {
+			userInput = prompt("Enter input for the program:");
+
+			if (userInput === null) {
+				setStatus("Ready");
+				setOutput("Execution cancelled by user.");
+				return;
+			}
+		}
+
 		const response = await fetch("/run", {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 			},
-			body: JSON.stringify({code: editor.getValue(),userInput}),
+			body: JSON.stringify({ code, userInput }),
 		});
 
 		const payload = await response.json();
@@ -73,36 +87,34 @@ async function runProgram() {
 			let errorText = "";
 
 			if (payload.errors && Array.isArray(payload.errors)) {
-				// multiple errors (lexer/parser/semantic)
-				errorText = payload.errors.map((error) => {
-					const location = error.line && error.column
+				errorText = payload.errors
+					.map((error) => {
+						const location =
+							error.line && error.column
+								? `Line ${error.line}, Column ${error.column}`
+								: "Unknown location";
+
+						const snippet = error.snippet
+							? `\n${error.snippet}\n${error.pointer || ""}`
+							: "";
+
+						return `[${error.phase || "error"}] ${location}: ${error.message}${snippet}`;
+					})
+					.join("\n\n");
+			} else if (payload.error && typeof payload.error === "object") {
+				const error = payload.error;
+
+				const location =
+					error.line && error.column
 						? `Line ${error.line}, Column ${error.column}`
 						: "Unknown location";
 
-					const snippet = error.snippet
-						? `\n${error.snippet}\n${error.pointer || ""}`
-						: "";
-
-					return `[${error.phase || "error"}] ${location}: ${error.message}${snippet}`;
-				}).join("\n\n");
-
-			} else if (payload.error && typeof payload.error === "object") {
-				// single runtime error
-				const error = payload.error;
-
-				const location = error.line && error.column
-					? `Line ${error.line}, Column ${error.column}`
-					: "Unknown location";
-
 				const snippet = error.snippet
-				? `\n${error.snippet}\n${error.pointer || ""}`
-				: "";
+					? `\n${error.snippet}\n${error.pointer || ""}`
+					: "";
 
-			errorText = `[${error.phase || "error"}] ${location}: ${error.message}${snippet}`;
-		
-
+				errorText = `[${error.phase || "error"}] ${location}: ${error.message}${snippet}`;
 			} else {
-				// fallback
 				errorText = payload.error || "Compiler execution failed.";
 			}
 
