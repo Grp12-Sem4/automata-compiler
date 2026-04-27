@@ -17,6 +17,7 @@ class Parser {
 	constructor(tokens) {
 		this.tokens = tokens;
 		this.current = 0;
+		this.errors = [];
 	}
 
 	parse() {
@@ -24,7 +25,16 @@ class Parser {
 		const startToken = this.peek();
 
 		while (!this.isAtEnd()) {
-			body.push(this.statement());
+			try {
+				body.push(this.statement());
+			} catch (error) {
+				if (error instanceof ParserError) {
+					this.errors.push(error);
+					this.synchronize();
+				} else {
+					throw error;
+				}
+			}
 		}
 
 		const endToken =
@@ -32,6 +42,25 @@ class Parser {
 				? this.getNodeEndToken(body[body.length - 1])
 				: startToken;
 		return this.createNode("Program", { body }, startToken, endToken);
+	}
+
+	synchronize() {
+		this.advance();
+
+		while (!this.isAtEnd()) {
+			if (this.previous().type === TokenType.SEMICOLON) return;
+
+			switch (this.peek().type) {
+				case TokenType.LET:
+				case TokenType.CONST:
+				case TokenType.PRINT:
+				case TokenType.IF:
+				case TokenType.WHILE:
+					return;
+			}
+
+			this.advance();
+		}
 	}
 
 	statement() {

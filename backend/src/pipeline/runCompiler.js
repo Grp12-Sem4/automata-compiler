@@ -4,8 +4,7 @@ const { Interpreter } = require("../modules/interpreter");
 const { Evaluator } = require("../modules/evaluator");
 const { SemanticAnalyzer } = require("../modules/semanticAnalyzer");
 
-function runCompiler(sourceCode, userInput = "")  
-{
+function runCompiler(sourceCode, userInput = "") {
 	if (typeof sourceCode !== "string") {
 		throw new Error("Source code must be a string.");
 	}
@@ -15,6 +14,22 @@ function runCompiler(sourceCode, userInput = "")
 
 	const parser = new Parser(tokens);
 	const ast = parser.parse();
+
+	if (parser.errors.length > 0) {
+		return {
+			success: false,
+			phase: "syntax",
+			tokens,
+			ast: null,
+			errors: parser.errors.map((err) => ({
+				message: err.message,
+				phase: err.phase,
+				line: err.line,
+				column: err.column,
+				lexeme: err.lexeme,
+			})),
+		};
+	}
 
 	const semanticAnalyzer = new SemanticAnalyzer(sourceCode);
 	const semanticResult = semanticAnalyzer.analyze(ast);
