@@ -270,9 +270,18 @@ class Lexer {
 
 	readString(startLine, startColumn) {
 		const valueStart = this.pos;
+
 		while (!this.isAtEnd() && this.current() !== '"') {
+			if (this.current() === "\n") {
+				throw new LexerError(
+					"Unterminated string literal (missing closing quote)",
+					startLine,
+					startColumn,
+				);
+			}
 			this.advance();
 		}
+
 		if (this.isAtEnd()) {
 			throw new LexerError(
 				"Unterminated string literal",
@@ -280,6 +289,7 @@ class Lexer {
 				startColumn,
 			);
 		}
+
 		const value = this.source.slice(valueStart, this.pos);
 		this.advance();
 		this.addToken(TokenType.STRING, value, startLine, startColumn);
